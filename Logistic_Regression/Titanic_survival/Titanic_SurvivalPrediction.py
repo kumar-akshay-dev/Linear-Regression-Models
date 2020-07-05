@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 get_ipython().run_line_magic('matplotlib', 'inline')
 import seaborn as sns
 
-basePath='A:\Git\Logictic_Regression\Titanic_survival'
+basePath='A:\Git\Logistic_Regression\Titanic_survival'
 trainDataFilePath = basePath+'/train.csv'
 testDataFilePath = basePath+'/test.csv'
 
@@ -80,31 +80,54 @@ sns.countplot(train['Survived'],label="Count")
 # In[9]:
 
 
-#Handling missing values
+#handling outliers
+# Detect outliers in the continuous columns
+
+cols = list(train)
+outliers = pd.DataFrame(columns=['Feature', 'Number of Outliers'])
+
+for column in cols:  # Iterate through each feature
+    if column in train.select_dtypes(include=np.number).columns:
+        q1 = train[column].quantile(0.25)
+        q3 = train[column].quantile(0.75)
+        iqr = q3 - q1
+        fence_low = q1 - (1.5 * iqr)
+        fence_high = q3 + (1.5 * iqr)
+
+        # finding the number of outliers using 'and(|) condition.
+        total_outlier = train[(train[column] < fence_low) |
+                                  (train[column] > fence_high)].shape[0]
+        outliers = outliers.append(
+            {
+                'Feature': column,
+                'Number of Outliers': total_outlier
+            },
+            ignore_index=True)
+outliers
 
 
 # In[10]:
 
 
-train.isna().sum()
+#Handling missing values
 
 
 # In[11]:
 
 
-(train.isnull().sum()/train.isnull().count()*100).sort_values(ascending = False)
+train.isna().sum()
 
 
 # In[12]:
 
 
-train.head(10)
+(train.isnull().sum()/train.isnull().count()*100).sort_values(ascending = False)
 
 
 # In[13]:
 
 
-train['Cabin'].unique()
+train.head(10)
 
 
 # In[14]:
@@ -172,17 +195,17 @@ train.isna().sum()
 # In[21]:
 
 
-#1.After filling all the missing data now. check correlation matrix using the seaborn heatmap
-sns.heatmap(train.corr(),annot=True,cmap='RdYlGn',linewidths=0.2) #data.corr()-->correlation matrix
-fig=plt.gcf()
-fig.set_size_inches(25,15)
-plt.show()
+train.head()
 
 
 # In[22]:
 
 
-#Now from the above heatmap,we can see that the features are not much correlated. The highest correlation is between SibSp and Parch i.e 0.41.
+#1.After filling all the missing data now. check correlation matrix using the seaborn heatmap
+sns.heatmap(train.corr(),annot=True,cmap='RdYlGn',linewidths=0.2) #data.corr()-->correlation matrix
+fig=plt.gcf()
+fig.set_size_inches(25,15)
+plt.show()
 
 
 # In[23]:
@@ -194,34 +217,47 @@ train.info()
 # In[24]:
 
 
-#Convert ‘Sex’ feature into numeric.
-genders = {"male": 0, "female": 1}
-data = [train, test]
-
-for dataset in data:
-    dataset['Sex'] = dataset['Sex'].map(genders)
+train["Sex"].unique()
 
 
 # In[25]:
+
+
+#Convert the categorical variables into integers
+
+train["Sex"][train["Sex"] == "male"] = 0
+train["Sex"][train["Sex"] == "female"] = 1
+
+test["Sex"][test["Sex"] == "male"] = 0
+test["Sex"][test["Sex"] == "female"] = 1
+
+
+# In[26]:
+
+
+train["Sex"].unique()
+
+
+# In[27]:
 
 
 from sklearn.preprocessing import OneHotEncoder
 # creating instance of one-hot-encoder
 enc = OneHotEncoder(handle_unknown='ignore')
 # passing bridge-types-cat column (label encoded values of bridge_types)
-enc_df = pd.DataFrame(enc.fit_transform(train[['Embarked']]).toarray())
+enc_df = pd.DataFrame(enc.fit_transform(train[['Embarked']]).toarray(),columns=['S', 'C', 'Q'])
 # merge with main df bridge_df on key values
 train = train.join(enc_df)
 train
 
 
-# In[26]:
+# In[28]:
 
 
-train.head(10)
+train.isna().sum()
 
 
-# In[27]:
+# In[29]:
 
 
 #Converting age to age group
@@ -238,20 +274,6 @@ for dataset in data:
     dataset.loc[ dataset['Age'] > 66, 'Age'] = 6
 
 
-# In[28]:
-
-
-train.head(10)
-
-
-# In[29]:
-
-
-#dropping irrelevant features
-train = train.drop(["PassengerId","Name","Ticket"], axis=1)
-test = test.drop(["PassengerId","Name","Ticket"], axis=1)
-
-
 # In[30]:
 
 
@@ -261,10 +283,61 @@ train.head(10)
 # In[31]:
 
 
+#dropping irrelevant features
+train = train.drop(["PassengerId","Name","Ticket"], axis=1)
+test = test.drop(["PassengerId","Name","Ticket"], axis=1)
+
+
+# In[38]:
+
+
+train = train.drop(["Embarked"], axis=1)
+test = test.drop(["Embarked"], axis=1)
+
+
+# In[39]:
+
+
+#Scaling the numerical data:
+from sklearn.preprocessing import StandardScaler
+#train_numerical_features = list(train.select_dtypes(include=['int64', 'float64', 'int32']).columns)
+ss_scaler = StandardScaler()
+#train_df_ss = pd.DataFrame(data = train)
+train[[ "Fare"]] = ss_scaler.fit_transform(train[["Fare"]])
+
+
+# In[40]:
+
+
+train.head(10)
+
+
+# In[41]:
+
+
 #Now all values have numerical equivalent
+train.iloc[:,1:11]
+train.iloc[:,0:1]
 
 
-# In[32]:
+# In[45]:
+
+
+#selecting best features
+X = train.iloc[:,1:11]  #independent columns
+y = train.iloc[:,0:1]    #target column i.e price range
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LogisticRegression
+model = LogisticRegression()
+rfe = RFE(model, 8)
+fit = rfe.fit(X, y)
+print("Num Features: %s" % (fit.n_features_))
+print("Selected Features: %s" % (fit.support_))
+print('Selected features: %s' % list(X.columns[rfe.support_]))
+print("Feature Ranking: %s" % (fit.ranking_))
+
+
+# In[46]:
 
 
 #import logistic regression
@@ -277,23 +350,24 @@ from sklearn.model_selection import cross_val_score #score evaluation
 from sklearn.model_selection import cross_val_predict #prediction
 
 
-# In[41]:
+# In[47]:
 
 
 from sklearn.linear_model import LogisticRegression
 
 
 Y_target = train["Survived"].values
-X_features_one = train[["Pclass", "Sex", "Age", "Fare","Deck"]].values
+X_features_one = train[['Pclass', 'Sex', 'Age', 'SibSp', 'Fare', 'S', 'C', 'Q']].values
                                
 logistic_model = LogisticRegression()
 logistic_model.fit(X_features_one, Y_target)
 
 # Print the Models Coefficients
 print(logistic_model.coef_)
+logistic_model.score(X_features_one, Y_target)
 
 
-# In[44]:
+# In[48]:
 
 
 # Make predictions
@@ -303,30 +377,21 @@ y_preds = logistic_model.predict(X = X_features_one)
 pd.crosstab(y_preds,train["Survived"])
 
 
-# In[46]:
+# In[49]:
 
 
 from sklearn.metrics import log_loss
 log_loss(y_true=train["Survived"],y_pred=y_preds)
 
 
-# In[47]:
-
-
-# Accuracy
-
-logistic_model.score(X = X_features_one ,
-                y = train["Survived"])
-
-
-# In[48]:
+# In[51]:
 
 
 from sklearn.metrics import accuracy_score
 accuracy_score(y_true=train["Survived"],y_pred=y_preds)
 
 
-# In[49]:
+# In[52]:
 
 
 from sklearn import metrics 
@@ -336,7 +401,7 @@ metrics.confusion_matrix(y_true=train["Survived"],  # True labels
                          y_pred=y_preds) # Predicted labels
 
 
-# In[51]:
+# In[53]:
 
 
 from sklearn import metrics
@@ -347,7 +412,7 @@ plt.title('cm', y=1.05, size=15)
 cm
 
 
-# In[52]:
+# In[54]:
 
 
 # View summary of common classification metrics
@@ -355,54 +420,64 @@ print(metrics.classification_report(y_true=train["Survived"],
                               y_pred=y_preds) )
 
 
-# In[53]:
+# # Precision Recall Curve
+
+# In[59]:
 
 
-y_preds_prob = logistic_model.predict_proba(X = X_features_one)
+from sklearn.metrics import precision_recall_curve
+
+# getting the probabilities of our predictions
+y_scores = logistic_model.predict_proba(X = X_features_one)
+y_scores = y_scores[:,1]
+
+precision, recall, threshold = precision_recall_curve(train["Survived"], y_scores)
+def plot_precision_and_recall(precision, recall, threshold):
+    plt.plot(threshold, precision[:-1], "r-", label="precision", linewidth=5)
+    plt.plot(threshold, recall[:-1], "b", label="recall", linewidth=5)
+    plt.xlabel("threshold", fontsize=19)
+    plt.legend(loc="upper right", fontsize=19)
+    plt.ylim([0, 1])
+
+plt.figure(figsize=(14, 7))
+plot_precision_and_recall(precision, recall, threshold)
+plt.show()
 
 
-# In[55]:
+# Above you can clearly see that the recall is falling of rapidly at a precision of around 80%. 
+# Because of that we may want to select the precision/recall tradeoff before that — maybe at around 75 %.
+# By looking at the plots we need a threshold of around 0.4
 
-
-y_pred_prob_survive = logistic_model.predict_proba(X = X_features_one)[:, 1]
-logistic_model.classes_
-
-
-# In[56]:
-
-
-fpr, tpr, thresholds = metrics.roc_curve(train["Survived"],
-                                         y_pred_prob_survive)
-
-plt.plot(fpr, tpr)
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.0])
-plt.rcParams['font.size'] = 12
-plt.title('ROC curve for survival classifier')
-plt.xlabel('False Positive Rate (1 - Specificity)')
-plt.ylabel('True Positive Rate (Sensitivity)')
-plt.grid(True)
-
-
-# In[57]:
-
-
-#Tradeoff between sensivity and specificity
-def evaluate_threshold(threshold):
-    print('Sensitivity:', tpr[thresholds > threshold][-1])
-    print('Specificity:', 1 - fpr[thresholds > threshold][-1])
-
-
-# In[58]:
-
-
-evaluate_threshold(0.5)
-
+# Another way to evaluate and compare your binary classifier is provided by the ROC AUC Curve. 
+# This curve plots the true positive rate (also called recall) against the false positive rate (ratio of incorrectly classified negative instances)
 
 # In[60]:
 
 
-evaluate_threshold(0.4)
+from sklearn.metrics import roc_curve
+# compute true positive rate and false positive rate
+false_positive_rate, true_positive_rate, thresholds = roc_curve(train["Survived"], y_scores)
+# plotting them against each other
+def plot_roc_curve(false_positive_rate, true_positive_rate, label=None):
+    plt.plot(false_positive_rate, true_positive_rate, linewidth=2, label=label)
+    plt.plot([0, 1], [0, 1], 'r', linewidth=4)
+    plt.axis([0, 1, 0, 1])
+    plt.xlabel('False Positive Rate (FPR)', fontsize=16)
+    plt.ylabel('True Positive Rate (TPR)', fontsize=16)
+
+plt.figure(figsize=(14, 7))
+plot_roc_curve(false_positive_rate, true_positive_rate)
+plt.show()
+
+
+# The ROC AUC Score is the corresponding score to the ROC AUC Curve. It is simply computed by measuring the area under the curve, which is called AUC.
+
+# In[61]:
+
+
+from sklearn.metrics import roc_auc_score
+r_a_score = roc_auc_score(train["Survived"], y_scores)
+print("ROC-AUC-Score:", r_a_score)
 
 
 # In[ ]:
